@@ -122,7 +122,7 @@ func (p *PrometheusWrapper) isLog(al *AutoLogLabel) bool {
 	if !p.inArray(al.Method, p.c.LogMethod) {
 		return false
 	}
-	if len(p.c.LogMethod) > 0 && !p.inArray(al.Api, p.c.LogApi) {
+	if !p.inArray(al.Api, p.c.LogApi) {
 		return false
 	}
 	return true
@@ -182,6 +182,9 @@ func NewPrometheusWrapper(conf *Config) (*PrometheusWrapper, error) {
 	}
 	if conf.Idc == "" {
 		conf.Idc = "none"
+	}
+	if len(conf.LogMethod) == 0 {
+		conf.LogMethod = []string{"GET", "POST"}
 	}
 	if conf.Service.ListenPort == 0 {
 		conf.Service.ListenPort = 8080
