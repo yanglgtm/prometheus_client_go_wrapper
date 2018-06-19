@@ -11,11 +11,12 @@ import (
 )
 
 type Config struct {
-	App       string
-	Idc       string
-	LogApi    []string
-	LogMethod []string
-	Buckets   []float64
+	App        string
+	Idc        string
+	LogApi     []string
+	LogMethod  []string
+	Buckets    []float64
+	Objectives map[float64]float64
 	// 服务配置
 	Service struct {
 		ListenPort int
@@ -34,6 +35,7 @@ type PrometheusWrapper struct {
 
 	gaugeState       *prometheus.GaugeVec
 	histogramLatency *prometheus.HistogramVec
+	summaryLatency   *prometheus.SummaryVec
 
 	counterRequests, counterSendBytes  *prometheus.CounterVec
 	counterRcvdBytes, counterException *prometheus.CounterVec
@@ -70,7 +72,7 @@ func (p *PrometheusWrapper) initMonitors() {
 	)
 	prometheus.MustRegister(p.counterRcvdBytes)
 
-	// 延迟
+	// 延迟 histogram
 	p.histogramLatency = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "histogram_latency",
@@ -80,6 +82,17 @@ func (p *PrometheusWrapper) initMonitors() {
 		[]string{"app", "idc", "module", "api", "method"},
 	)
 	prometheus.MustRegister(p.histogramLatency)
+
+	// 延迟 summary
+	p.summaryLatency = prometheus.NewSummaryVec(
+		prometheus.SummaryOpts{
+			Name:       "summary_latency",
+			Help:       "summary of module latency",
+			Objectives: p.c.Objectives,
+		},
+		[]string{"app", "idc", "module", "api", "method"},
+	)
+	prometheus.MustRegister(p.summaryLatency)
 
 	// 状态
 	p.gaugeState = prometheus.NewGaugeVec(
@@ -146,9 +159,18 @@ func (p *PrometheusWrapper) Log(api, method, code string, sendBytes, rcvdBytes, 
 func (p *PrometheusWrapper) worker() {
 	for al := range p.alc {
 		p.counterRequests.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method, al.Code).Inc()
-		p.counterSendBytes.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method, al.Code).Add(al.SendBytes)
-		p.counterRcvdBytes.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method, al.Code).Add(al.RcvdBytes)
-		p.histogramLatency.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method).Observe(al.Latency)
+		if al.SendBytes > 0 {
+			p.counterSendBytes.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method, al.Code).Add(al.SendBytes)
+		}
+		if al.RcvdBytes > 0 {
+			p.counterRcvdBytes.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method, al.Code).Add(al.RcvdBytes)
+		}
+		if len(p.c.Buckets) > 0 {
+			p.histogramLatency.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method).Observe(al.Latency)
+		}
+		if len(p.c.Objectives) > 0 {
+			p.summaryLatency.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method).Observe(al.Latency)
+		}
 	}
 }
 
@@ -164,8 +186,12 @@ func (p *PrometheusWrapper) RcvdBytesLog(module, api, method, code string, byte 
 	p.counterRcvdBytes.WithLabelValues(p.c.App, p.c.Idc, module, api, method, code).Add(byte)
 }
 
-func (p *PrometheusWrapper) LatencyLog(module, api, method string, latency float64) {
+func (p *PrometheusWrapper) HistogramLatencyLog(module, api, method string, latency float64) {
 	p.histogramLatency.WithLabelValues(p.c.App, p.c.Idc, module, api, method).Observe(latency)
+}
+
+func (p *PrometheusWrapper) SummaryLatencyLog(module, api, method string, latency float64) {
+	p.summaryLatency.WithLabelValues(p.c.App, p.c.Idc, module, api, method).Observe(latency)
 }
 
 func (p *PrometheusWrapper) ExceptionLog(module, exception string) {
