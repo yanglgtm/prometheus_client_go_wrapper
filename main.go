@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -11,12 +12,13 @@ import (
 )
 
 type Config struct {
-	App        string
-	Idc        string
-	LogApi     []string
-	LogMethod  []string
-	Buckets    []float64
-	Objectives map[float64]float64
+	App            string
+	Idc            string
+	LogApi         []string
+	LogMethod      []string
+	Buckets        []float64
+	Objectives     map[float64]float64
+	DefaultCollect bool
 	// 服务配置
 	Service struct {
 		ListenPort int
@@ -32,6 +34,7 @@ type AutoLogLabel struct {
 type PrometheusWrapper struct {
 	c   Config
 	alc chan *AutoLogLabel
+	reg *prometheus.Registry
 
 	gaugeState       *prometheus.GaugeVec
 	histogramLatency *prometheus.HistogramVec
@@ -42,6 +45,7 @@ type PrometheusWrapper struct {
 }
 
 func (p *PrometheusWrapper) initMonitors() {
+	p.reg = prometheus.NewRegistry()
 	// 请求数
 	p.counterRequests = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -50,7 +54,7 @@ func (p *PrometheusWrapper) initMonitors() {
 		},
 		[]string{"app", "idc", "module", "api", "method", "code"},
 	)
-	prometheus.MustRegister(p.counterRequests)
+	p.reg.MustRegister(p.counterRequests)
 
 	// 出口流量
 	p.counterSendBytes = prometheus.NewCounterVec(
@@ -60,7 +64,7 @@ func (p *PrometheusWrapper) initMonitors() {
 		},
 		[]string{"app", "idc", "module", "api", "method", "code"},
 	)
-	prometheus.MustRegister(p.counterSendBytes)
+	p.reg.MustRegister(p.counterSendBytes)
 
 	// 入口流量
 	p.counterRcvdBytes = prometheus.NewCounterVec(
@@ -70,7 +74,7 @@ func (p *PrometheusWrapper) initMonitors() {
 		},
 		[]string{"app", "idc", "module", "api", "method", "code"},
 	)
-	prometheus.MustRegister(p.counterRcvdBytes)
+	p.reg.MustRegister(p.counterRcvdBytes)
 
 	// 延迟 histogram
 	p.histogramLatency = prometheus.NewHistogramVec(
@@ -81,7 +85,7 @@ func (p *PrometheusWrapper) initMonitors() {
 		},
 		[]string{"app", "idc", "module", "api", "method"},
 	)
-	prometheus.MustRegister(p.histogramLatency)
+	p.reg.MustRegister(p.histogramLatency)
 
 	// 延迟 summary
 	p.summaryLatency = prometheus.NewSummaryVec(
@@ -92,7 +96,7 @@ func (p *PrometheusWrapper) initMonitors() {
 		},
 		[]string{"app", "idc", "module", "api", "method"},
 	)
-	prometheus.MustRegister(p.summaryLatency)
+	p.reg.MustRegister(p.summaryLatency)
 
 	// 状态
 	p.gaugeState = prometheus.NewGaugeVec(
@@ -102,7 +106,7 @@ func (p *PrometheusWrapper) initMonitors() {
 		},
 		[]string{"app", "idc", "state"},
 	)
-	prometheus.MustRegister(p.gaugeState)
+	p.reg.MustRegister(p.gaugeState)
 
 	// 异常
 	p.counterException = prometheus.NewCounterVec(
@@ -112,12 +116,20 @@ func (p *PrometheusWrapper) initMonitors() {
 		},
 		[]string{"app", "idc", "module", "exception"},
 	)
-	prometheus.MustRegister(p.counterException)
+	p.reg.MustRegister(p.counterException)
+
+	if p.c.DefaultCollect {
+		p.reg.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
+		p.reg.MustRegister(prometheus.NewGoCollector())
+	}
 }
 
 func (p *PrometheusWrapper) run() {
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())
+		http.Handle("/metrics", promhttp.InstrumentMetricHandler(
+			p.reg,
+			promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{})),
+		)
 		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", p.c.Service.ListenPort), nil))
 	}()
 }
