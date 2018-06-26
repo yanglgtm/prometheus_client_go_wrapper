@@ -1,10 +1,10 @@
 package prometheus_client_go_wrapper
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -144,7 +144,7 @@ func (p *PrometheusWrapper) isLog(al *AutoLogLabel) bool {
 func (p *PrometheusWrapper) Log(api, method, code string, sendBytes, rcvdBytes, latency float64) {
 	al := &AutoLogLabel{
 		Module:    "self",
-		Api:       api,
+		Api:       strings.ToLower(api),
 		Method:    method,
 		Code:      code,
 		SendBytes: sendBytes,
@@ -202,9 +202,9 @@ func (p *PrometheusWrapper) StateLog(state string, value float64) {
 	p.gaugeState.WithLabelValues(p.c.App, p.c.Idc, state).Set(value)
 }
 
-func NewPrometheusWrapper(conf *Config) (*PrometheusWrapper, error) {
+func NewPrometheusWrapper(conf *Config) *PrometheusWrapper {
 	if conf.App == "" {
-		return nil, errors.New("missing App config")
+		panic("missing App config")
 	}
 	if conf.Idc == "" {
 		conf.Idc = "none"
@@ -214,6 +214,10 @@ func NewPrometheusWrapper(conf *Config) (*PrometheusWrapper, error) {
 	}
 	if conf.Service.ListenPort == 0 {
 		conf.Service.ListenPort = 8080
+	}
+
+	for k, v := range conf.LogApi {
+		conf.LogApi[k] = strings.ToLower(v)
 	}
 
 	w := &PrometheusWrapper{
@@ -227,5 +231,5 @@ func NewPrometheusWrapper(conf *Config) (*PrometheusWrapper, error) {
 	}
 	w.run()
 
-	return w, nil
+	return w
 }

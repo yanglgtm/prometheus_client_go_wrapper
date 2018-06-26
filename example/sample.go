@@ -11,8 +11,7 @@ import (
 var ins *prometheusWrapper.PrometheusWrapper
 
 func main() {
-	var err error
-	ins, err = prometheusWrapper.NewPrometheusWrapper(&prometheusWrapper.Config{
+	ins = prometheusWrapper.NewPrometheusWrapper(&prometheusWrapper.Config{
 		App:        "test",
 		Idc:        "beijing",
 		LogMethod:  []string{"GET", "POST"},
@@ -21,9 +20,6 @@ func main() {
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}, // summary 配置
 		Service:    struct{ ListenPort int }{ListenPort: 9000},
 	})
-	if err != nil {
-		panic(err)
-	}
 
 	go autoLog()
 
