@@ -5,7 +5,7 @@ import "testing"
 var ins *PrometheusWrapper
 
 func init() {
-	ins = NewPrometheusWrapper(&Config{App: "test"})
+	ins = NewPrometheusWrapper(&Config{App: "test", LogApi: []string{"/test"}})
 }
 
 func BenchmarkLog(b *testing.B) {

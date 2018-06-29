@@ -25,15 +25,8 @@ type Config struct {
 	}
 }
 
-type AutoLogLabel struct {
-	Module, Method, Api, Code string
-	SendBytes, RcvdBytes      float64
-	Latency                   float64
-}
-
 type PrometheusWrapper struct {
 	c   Config
-	alc chan *AutoLogLabel
 	reg *prometheus.Registry
 
 	gaugeState       *prometheus.GaugeVec
@@ -45,7 +38,6 @@ type PrometheusWrapper struct {
 }
 
 func (p *PrometheusWrapper) initMonitors() {
-	p.reg = prometheus.NewRegistry()
 	// 请求数
 	p.counterRequests = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -143,46 +135,25 @@ func (p *PrometheusWrapper) inArray(a string, list []string) bool {
 	return false
 }
 
-func (p *PrometheusWrapper) isLog(al *AutoLogLabel) bool {
-	if !p.inArray(al.Method, p.c.LogMethod) {
-		return false
-	}
-	if !p.inArray(al.Api, p.c.LogApi) {
-		return false
-	}
-	return true
-}
-
 func (p *PrometheusWrapper) Log(api, method, code string, sendBytes, rcvdBytes, latency float64) {
-	al := &AutoLogLabel{
-		Module:    "self",
-		Api:       strings.ToLower(api),
-		Method:    method,
-		Code:      code,
-		SendBytes: sendBytes,
-		RcvdBytes: rcvdBytes,
-		Latency:   latency,
+	if !p.inArray(method, p.c.LogMethod) {
+		return
 	}
-	if p.isLog(al) {
-		p.alc <- al
+	if !p.inArray(api, p.c.LogApi) {
+		return
 	}
-}
-
-func (p *PrometheusWrapper) worker() {
-	for al := range p.alc {
-		p.counterRequests.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method, al.Code).Inc()
-		if al.SendBytes > 0 {
-			p.counterSendBytes.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method, al.Code).Add(al.SendBytes)
-		}
-		if al.RcvdBytes > 0 {
-			p.counterRcvdBytes.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method, al.Code).Add(al.RcvdBytes)
-		}
-		if len(p.c.Buckets) > 0 {
-			p.histogramLatency.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method).Observe(al.Latency)
-		}
-		if len(p.c.Objectives) > 0 {
-			p.summaryLatency.WithLabelValues(p.c.App, p.c.Idc, al.Module, al.Api, al.Method).Observe(al.Latency)
-		}
+	p.counterRequests.WithLabelValues(p.c.App, p.c.Idc, "self", api, method, code).Inc()
+	if sendBytes > 0 {
+		p.counterSendBytes.WithLabelValues(p.c.App, p.c.Idc, "self", api, method, code).Add(sendBytes)
+	}
+	if rcvdBytes > 0 {
+		p.counterRcvdBytes.WithLabelValues(p.c.App, p.c.Idc, "self", api, method, code).Add(rcvdBytes)
+	}
+	if len(p.c.Buckets) > 0 {
+		p.histogramLatency.WithLabelValues(p.c.App, p.c.Idc, "self", api, method).Observe(latency)
+	}
+	if len(p.c.Objectives) > 0 {
+		p.summaryLatency.WithLabelValues(p.c.App, p.c.Idc, "self", api, method).Observe(latency)
 	}
 }
 
@@ -234,13 +205,10 @@ func NewPrometheusWrapper(conf *Config) *PrometheusWrapper {
 
 	w := &PrometheusWrapper{
 		c:   *conf,
-		alc: make(chan *AutoLogLabel, 200),
+		reg: prometheus.NewRegistry(),
 	}
 
 	w.initMonitors()
-	for i := 0; i < 4; i++ {
-		go w.worker()
-	}
 	w.run()
 
 	return w
