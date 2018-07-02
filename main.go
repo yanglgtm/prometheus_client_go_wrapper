@@ -117,6 +117,9 @@ func (p *PrometheusWrapper) initMonitors() {
 }
 
 func (p *PrometheusWrapper) run() {
+	if p.c.Service.ListenPort == 0 {
+		return
+	}
 	go func() {
 		http.Handle("/metrics", promhttp.InstrumentMetricHandler(
 			p.reg,
