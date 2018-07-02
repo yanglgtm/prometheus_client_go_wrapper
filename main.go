@@ -125,6 +125,7 @@ func (p *PrometheusWrapper) run() {
 			p.reg,
 			promhttp.HandlerFor(p.reg, promhttp.HandlerOpts{})),
 		)
+		log.Printf("Prometheus listening on: %d", p.c.Service.ListenPort)
 		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", p.c.Service.ListenPort), nil))
 	}()
 }
@@ -197,9 +198,6 @@ func NewPrometheusWrapper(conf *Config) *PrometheusWrapper {
 	}
 	if len(conf.LogMethod) == 0 {
 		conf.LogMethod = []string{"GET", "POST"}
-	}
-	if conf.Service.ListenPort == 0 {
-		conf.Service.ListenPort = 8080
 	}
 
 	for k, v := range conf.LogApi {
