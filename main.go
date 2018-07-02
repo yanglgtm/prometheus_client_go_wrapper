@@ -143,6 +143,7 @@ func (p *PrometheusWrapper) Log(api, method, code string, sendBytes, rcvdBytes, 
 	if !p.inArray(method, p.c.LogMethod) {
 		return
 	}
+	api = strings.ToLower(api)
 	if !p.inArray(api, p.c.LogApi) {
 		return
 	}
