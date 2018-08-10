@@ -96,7 +96,7 @@ func (p *PrometheusWrapper) initMonitors() {
 			Name: "gauge_state",
 			Help: "gauge of app state",
 		},
-		[]string{"app", "idc", "state"},
+		[]string{"app", "idc", "module", "state"},
 	)
 	p.reg.MustRegister(p.gaugeState)
 
@@ -186,8 +186,8 @@ func (p *PrometheusWrapper) ExceptionLog(module, exception string) {
 	p.counterException.WithLabelValues(p.c.App, p.c.Idc, module, exception).Inc()
 }
 
-func (p *PrometheusWrapper) StateLog(state string, value float64) {
-	p.gaugeState.WithLabelValues(p.c.App, p.c.Idc, state).Set(value)
+func (p *PrometheusWrapper) StateLog(module, state string, value float64) {
+	p.gaugeState.WithLabelValues(p.c.App, p.c.Idc, module, state).Set(value)
 }
 
 func NewPrometheusWrapper(conf *Config) *PrometheusWrapper {

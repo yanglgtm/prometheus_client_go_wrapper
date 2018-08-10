@@ -12,13 +12,14 @@ var ins *prometheusWrapper.PrometheusWrapper
 
 func main() {
 	ins = prometheusWrapper.NewPrometheusWrapper(&prometheusWrapper.Config{
-		App:        "test",
-		Idc:        "beijing",
-		LogMethod:  []string{"GET", "POST"},
-		LogApi:     []string{"/foo", "/bar"},
-		Buckets:    prometheus.LinearBuckets(10, 10, 20),                   // histogram 配置
-		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}, // summary 配置
-		Service:    struct{ ListenPort int }{ListenPort: 9000},
+		App:            "test",
+		Idc:            "beijing",
+		LogMethod:      []string{"GET", "POST"},
+		LogApi:         []string{"/foo", "/bar"},
+		Buckets:        prometheus.LinearBuckets(10, 10, 20),                   // histogram 配置
+		Objectives:     map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}, // summary 配置
+		DefaultCollect: true,
+		Service:        struct{ ListenPort int }{ListenPort: 9000},
 	})
 
 	go autoLog()
@@ -33,7 +34,7 @@ func main() {
 		ins.SendBytesLog("backend", "/baz", "GET", "200", 3000)
 		ins.HistogramLatencyLog("backend", "/baz", "GET", float64(rand.Intn(200)))
 		ins.SummaryLatencyLog("backend", "/baz", "GET", float64(rand.Intn(200)))
-		ins.StateLog("reading", 500)
+		ins.StateLog("backend", "reading", 500)
 		ins.ExceptionLog("mysql", "timeout")
 		ins.ExceptionLog("mysql", "panic")
 	}
